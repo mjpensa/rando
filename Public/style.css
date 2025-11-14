@@ -46,13 +46,14 @@
   font-weight: 500;
   padding: 12px 8px;
   text-align: center;
-  background-color: #282828; /* Match chart background */
+  background-color: #da291c; /* Set time interval background color */
   border-bottom: 1px solid #0D0D0D; /* Grid line color */
   border-left: 1px solid #0D0D0D; /* Grid line color */
   color: #FFFFFF; /* Text Color */
 }
 .gantt-header-label { /* First header cell (empty) */
   border-left: 0;
+  background-color: #282828; /* Override to keep original background */
 }
 
 /* 10. Row Label (Swimlane or Task) */
