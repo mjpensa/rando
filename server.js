@@ -1,564 +1,400 @@
-/**
- * This script runs *only* on chart.html.
- * It reads the chart data from sessionStorage and renders the chart.
- * All chart-related functions from main.js have been moved here.
- */
+import express from 'express';
+import multer from 'multer';
+import mammoth from 'mammoth';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import 'dotenv/config';
 
-document.addEventListener("DOMContentLoaded", () => {
-  const ganttData = JSON.parse(sessionStorage.getItem('ganttData'));
+// --- Gemini API Configuration ---
+const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${process.env.API_KEY}`;
+// ---
 
-  if (ganttData) {
-    setupChart(ganttData);
-  } else {
-    document.getElementById('chart-root').innerHTML = 
-      '<h1 style="font-family: sans-serif; text-align: center; margin-top: 40px;">No chart data found. Please close this tab and try generating the chart again.</h1>';
+// --- Server Setup ---
+const app = express();
+const port = process.env.PORT || 3000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// --- Middleware ---
+app.use(express.json());
+app.use(express.static(join(__dirname, 'Public'))); // Use 'Public' (uppercase)
+const upload = multer({ storage: multer.memoryStorage() }); // Store files in memory
+
+// --- Global variable to cache research text ---
+let researchTextCache = "";
+let researchFilesCache = []; // To store file names for context
+
+// --- Helper Function for API Calls (JSON Response) ---
+async function callGeminiForJson(payload, retryCount = 3) {
+  for (let attempt = 0; attempt < retryCount; attempt++) {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API call failed with status: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
+        console.error('Invalid API response:', JSON.stringify(result));
+        throw new Error('Invalid response from AI API');
+      }
+
+      const safetyRatings = result.candidates[0].safetyRatings;
+      if (safetyRatings) {
+        const blockedRating = safetyRatings.find(rating => rating.blocked);
+        if (blockedRating) {
+          throw new Error(`API call blocked due to safety rating: ${blockedRating.category}`);
+        }
+      }
+      
+      const extractedJsonText = result.candidates[0].content.parts[0].text;
+      return JSON.parse(extractedJsonText); // Return the parsed JSON
+
+    } catch (error) {
+      console.log(`Attempt ${attempt + 1} failed:`, error.message);
+      if (attempt >= retryCount - 1) {
+        throw error; // Throw the last error
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  throw new Error('All API retry attempts failed.');
+}
+
+// --- NEW Helper Function for API Calls (Text Response) ---
+async function callGeminiForText(payload, retryCount = 3) {
+  for (let attempt = 0; attempt < retryCount; attempt++) {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API call failed with status: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
+        console.error('Invalid API response:', JSON.stringify(result));
+        throw new Error('Invalid response from AI API');
+      }
+
+      const safetyRatings = result.candidates[0].safetyRatings;
+      if (safetyRatings) {
+        const blockedRating = safetyRatings.find(rating => rating.blocked);
+        if (blockedRating) {
+          throw new Error(`API call blocked due to safety rating: ${blockedRating.category}`);
+        }
+      }
+      
+      return result.candidates[0].content.parts[0].text; // Return raw text
+
+    } catch (error) {
+      console.log(`Attempt ${attempt + 1} failed:`, error.message);
+      if (attempt >= retryCount - 1) {
+        throw error; // Throw the last error
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+    }
+  }
+  throw new Error('All API retry attempts failed.');
+}
+
+
+// --- Main Endpoint: /generate-chart ---
+app.post('/generate-chart', upload.array('researchFiles'), async (req, res) => {
+  const userPrompt = req.body.prompt;
+  researchTextCache = ""; // Clear cache for new request
+  researchFilesCache = []; // Clear cache
+
+  // 1. Extract text from uploaded files (Sort for determinism)
+  try {
+    if (req.files) {
+      const sortedFiles = req.files.sort((a, b) => a.originalname.localeCompare(b.originalname));
+      for (const file of sortedFiles) {
+        researchTextCache += `\n\n--- Start of file: ${file.originalname} ---\n`;
+        researchFilesCache.push(file.originalname);
+
+        // --- MODIFICATION: Use convertToHtml for .docx to preserve links ---
+        if (file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+          // We convert to HTML to keep <a href="..."> tags
+          const result = await mammoth.convertToHtml({ buffer: file.buffer });
+          researchTextCache += result.value;
+        } else {
+          // .md and .txt files are kept as raw text
+          researchTextCache += file.buffer.toString('utf8');
+        }
+        researchTextCache += `\n--- End of file: ${file.originalname} ---\n`;
+      }
+    }
+  } catch (e) {
+    console.error("File extraction error:", e);
+    return res.status(500).json({ error: "Error processing uploaded files." });
+  }
+
+  // 2. Define the *single, powerful* system prompt
+  const geminiSystemPrompt = `You are an expert project management analyst. Your job is to analyze a user's prompt and research files to build a complete Gantt chart data object.
+  
+  You MUST respond with *only* a valid JSON object matching the schema.
+  
+  **CRITICAL LOGIC:**
+  1.  **TIME HORIZON:** First, check the user's prompt for an *explicitly requested* time range (e.g., "2020-2030").
+      - If found, use that range.
+      - If NOT found, find the *earliest* and *latest* date in all the research to create the range.
+  2.  **TIME INTERVAL:** Based on the *total duration* of that range, you MUST choose an interval:
+      - 0-3 months total: Use "Weeks" (e.g., ["W1 2026", "W2 2026"])
+      - 4-12 months total: Use "Months" (e.g., ["Jan 2026", "Feb 2026"])
+      - 1-3 years total: Use "Quarters" (e.g., ["Q1 2026", "Q2 2026"])
+      - 3+ years total: You MUST use "Years" (e.g., ["2020", "2021", "2022"])
+  3.  **CHART DATA:** Create the 'data' array.
+      - First, identify all logical swimlanes (e.g., "Regulatory Drivers", "JPMorgan Chase"). Add an object for each: \`{ "title": "Swimlane Name", "isSwimlane": true, "entity": "Swimlane Name" }\`
+      - Immediately after each swimlane, add all tasks that belong to it: \`{ "title": "Task Name", "isSwimlane": false, "entity": "Swimlane Name", "bar": { ... } }\`
+      - **DO NOT** create empty swimlanes.
+  4.  **BAR LOGIC:**
+      - 'startCol' is the 1-based index of the 'timeColumns' array where the task begins.
+      - 'endCol' is the 1-based index of the 'timeColumns' array where the task ends, **PLUS ONE**.
+      - A task in "2022" has \`startCol: 3, endCol: 4\` (if 2020 is col 1).
+      - If a date is "Q1 2024" and the interval is "Years", map it to the "2024" column index.
+      - If a date is unknown ("null"), the 'bar' object must be \`{ "startCol": null, "endCol": null, "color": "..." }\`.
+  5.  **COLORS & LEGEND:** This is a two-step process.
+      a.  **Step 1: Find Cross-Swimlane Themes:** First, analyze ALL tasks from ALL swimlanes. Try to find logical, thematic groupings (e.g., "Regulatory Activity", "Product Launch", "Internal Review").
+      b.  **Step 2: Assign Colors:** The available color names are: "light-grey", "mid-grey", "light-red", "dark-blue", "dark-red".
+          * **IF you find 2-5 strong thematic groupings:** Assign a unique color from the available list to each theme. Color ALL tasks belonging to that theme with its assigned color, *regardless of which swimlane they are in*.
+          * **IF you do this:** You MUST populate the 'legend' array, e.g., \`"legend": [{ "color": "dark-red", "label": "Regulatory Activity" }, { "color": "dark-blue", "label": "Product Launch" }]\`.
+          * **FALLBACK:** If you *cannot* find any logical themes, then do this instead: assign a *single, different* color from the available list to each swimlane (e.g., all tasks under "Swimlane A" are "dark-red", all tasks under "Swimlane B" are "dark-blue").
+          * **IF you use the FALLBACK:** The 'legend' array MUST be an empty array \`[]\`.
+  6.  **SANITIZATION:** All string values MUST be valid JSON strings. You MUST properly escape any characters that would break JSON, such as double quotes (\") and newlines (\\n), within the string value itself.`;
+  
+  const geminiUserQuery = `User Prompt: "${userPrompt}"\n\nResearch Content:\n${researchTextCache}`;
+
+  // 3. Define the schema for the *visual data only*
+  const ganttSchema = {
+    type: "OBJECT",
+    properties: {
+      title: { type: "STRING" },
+      timeColumns: {
+        type: "ARRAY",
+        items: { type: "STRING" }
+      },
+      data: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            title: { type: "STRING" },
+            isSwimlane: { type: "BOOLEAN" },
+            entity: { type: "STRING" }, 
+            bar: {
+              type: "OBJECT",
+              properties: {
+                startCol: { type: "NUMBER" },
+                endCol: { type: "NUMBER" },
+                color: { type: "STRING" }
+              },
+            }
+          },
+          required: ["title", "isSwimlane", "entity"]
+        }
+      },
+      legend: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            color: { type: "STRING" },
+            label: { type: "STRING" }
+          },
+          required: ["color", "label"]
+        }
+      }
+    },
+    required: ["title", "timeColumns", "data", "legend"]
+  };
+
+  // 4. Define the payload
+  const payload = {
+    contents: [{ parts: [{ text: geminiUserQuery }] }],
+    systemInstruction: { parts: [{ text: geminiSystemPrompt }] },
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: ganttSchema,
+      maxOutputTokens: 8192,
+      temperature: 0,
+      topP: 1,
+      topK: 1
+    }
+  };
+
+  // 5. Call the API
+  try {
+    const ganttData = await callGeminiForJson(payload);
+    
+    // 6. Send the Gantt data to the frontend
+    res.json(ganttData); // Send the object directly
+
+  } catch (e) {
+    console.error("API call error:", e);
+    res.status(500).json({ error: `Error generating chart data: ${e.message}` });
   }
 });
 
-/**
- * The Dynamic Renderer.
- * This function builds the chart *based on* the data from sessionStorage.
- */
-function setupChart(ganttData) {
-  
-  // MODIFICATION: Render into '#chart-root' instead of '#chart-output'
-  const container = document.getElementById('chart-root');
-  if (!container) {
-    console.error("Could not find chart container!");
-    return;
-  }
-  
-  // Clear container
-  container.innerHTML = '';
-
-  // Create the main chart wrapper
-  const chartWrapper = document.createElement('div');
-  chartWrapper.id = 'gantt-chart-container'; // ID for styling & export
-  
-  // -------------------------------------------------------------------
-  // --- NEW: Add BIP Logo ---
-  // -------------------------------------------------------------------
-  // We add this *before* the title so it's part of the wrapper.
-  // We use inline styles for absolute positioning.
-  const logoImg = document.createElement('img');
-  logoImg.src = '/bip_logo.png';
-  logoImg.alt = 'BIP Logo';
-  
-  // Apply inline styles for positioning
-  logoImg.style.position = 'absolute';
-  logoImg.style.top = '30px'; // Moved down from 28px for better alignment
-  logoImg.style.right = '24px'; // Padding from right edge
-  logoImg.style.height = '40px'; // Slightly smaller than form logo
-  logoImg.style.width = 'auto';
-  logoImg.style.zIndex = '10'; // Ensure it's above the grid
-  
-  chartWrapper.appendChild(logoImg);
-  // --- END: Add BIP Logo ---
-  
-  // Add Title (from data)
-  const titleEl = document.createElement('div');
-  titleEl.className = 'gantt-title';
-  titleEl.textContent = ganttData.title;
-  chartWrapper.appendChild(titleEl);
-
-  // Create Grid
-  const gridEl = document.createElement('div');
-  gridEl.className = 'gantt-grid';
-  
-  // --- Dynamic Grid Columns ---
-  const numCols = ganttData.timeColumns.length;
-  // --- MODIFICATION: Increased min-width from 220px to 330px (50% wider) ---
-  gridEl.style.gridTemplateColumns = `minmax(330px, 1.5fr) repeat(${numCols}, 1fr)`;
-
-  // --- Create Header Row ---
-  const headerLabel = document.createElement('div');
-  headerLabel.className = 'gantt-header gantt-header-label';
-  gridEl.appendChild(headerLabel);
-  
-  for (const colName of ganttData.timeColumns) {
-    const headerCell = document.createElement('div');
-    headerCell.className = 'gantt-header';
-    headerCell.textContent = colName;
-    gridEl.appendChild(headerCell);
-  }
-
-  // --- Create Data Rows ---
-  for (const row of ganttData.data) {
-    const isSwimlane = row.isSwimlane;
-    
-    // 1. Create Label Cell
-    const labelEl = document.createElement('div');
-    labelEl.className = `gantt-row-label ${isSwimlane ? 'swimlane' : 'task'}`;
-    labelEl.textContent = row.title;
-    gridEl.appendChild(labelEl);
-    
-    // 2. Create Bar Area
-    const barAreaEl = document.createElement('div');
-    barAreaEl.className = `gantt-bar-area ${isSwimlane ? 'swimlane' : 'task'}`;
-    barAreaEl.style.gridColumn = `2 / span ${numCols}`;
-    barAreaEl.style.gridTemplateColumns = `repeat(${numCols}, 1fr)`;
-    
-    // Add empty cells for vertical grid lines
-    for (let i = 1; i <= numCols; i++) {
-      const cell = document.createElement('span');
-      cell.setAttribute('data-col', i);
-      barAreaEl.appendChild(cell);
-    }
-
-    // 3. Add the bar (if it's a task and has bar data)
-    if (!isSwimlane && row.bar && row.bar.startCol != null) {
-      const bar = row.bar;
-      
-      const barEl = document.createElement('div');
-      barEl.className = 'gantt-bar';
-      barEl.setAttribute('data-color', bar.color || 'default');
-      barEl.style.gridColumn = `${bar.startCol} / ${bar.endCol}`;
-      
-      barAreaEl.appendChild(barEl);
-
-      // --- NEW: Add click listener for analysis ---
-      // We make both the label and the bar area clickable
-      const taskIdentifier = { taskName: row.title, entity: row.entity };
-      labelEl.addEventListener('click', () => showAnalysisModal(taskIdentifier));
-      barAreaEl.addEventListener('click', () => showAnalysisModal(taskIdentifier));
-      labelEl.style.cursor = 'pointer';
-      barAreaEl.style.cursor = 'pointer';
-    }
-    
-    gridEl.appendChild(barAreaEl);
-  }
-
-  chartWrapper.appendChild(gridEl);
-  
-  // --- NEW: Add Legend (if it exists) ---
-  if (ganttData.legend && ganttData.legend.length > 0) {
-    const legendEl = buildLegend(ganttData.legend);
-    chartWrapper.appendChild(legendEl);
-  }
-  // --- END: Add Legend ---
-  
-  // --- Add Export Button ---
-  const exportContainer = document.createElement('div');
-  exportContainer.className = 'export-container';
-  const exportBtn = document.createElement('button');
-  exportBtn.id = 'export-png-btn';
-  exportBtn.className = 'export-button';
-  exportBtn.textContent = 'Export as PNG';
-  exportContainer.appendChild(exportBtn);
-  
-  // Add the chart and button to the page
-  container.appendChild(chartWrapper);
-  container.appendChild(exportContainer);
-
-  // Add Export Functionality
-  addExportListener();
-
-  // --- NEW: Add "Today" Line ---
-  // We use the provided date: November 14, 2025 (Updated to current time)
-  const today = new Date('2025-11-14T12:00:00'); 
-  addTodayLine(gridEl, ganttData.timeColumns, today);
-}
-
-/**
- * Finds the export button and chart container, then
- * adds a click listener to trigger html2canvas.
- */
-function addExportListener() {
-  const exportBtn = document.getElementById('export-png-btn');
-  const chartContainer = document.getElementById('gantt-chart-container');
-
-  if (!exportBtn || !chartContainer) {
-    console.warn("Export button or chart container not found.");
-    return;
-  }
-
-  exportBtn.addEventListener('click', () => {
-    exportBtn.textContent = 'Exporting...';
-    exportBtn.disabled = true;
-
-    html2canvas(chartContainer, { 
-      useCORS: true,
-      logging: false,
-      scale: 2 // Render at 2x resolution
-    }).then(canvas => {
-      const link = document.createElement('a');
-      link.download = 'gantt-chart.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      
-      exportBtn.textContent = 'Export as PNG';
-      exportBtn.disabled = false;
-    }).catch(err => {
-      console.error("Error exporting canvas:", err);
-      exportBtn.textContent = 'Export as PNG';
-      exportBtn.disabled = false;
-      alert("Error exporting chart. See console for details.");
-    });
-  });
-}
 
 // -------------------------------------------------------------------
-// --- "TODAY" LINE HELPER FUNCTIONS ---
+// --- "ON-DEMAND" ANALYSIS ENDPOINT ---
 // -------------------------------------------------------------------
+app.post('/get-task-analysis', async (req, res) => {
+  const { taskName, entity } = req.body;
 
-/**
- * Calculates and adds the "Today" line to the grid.
- * @param {HTMLElement} gridEl - The main .gantt-grid element.
- * @param {string[]} timeColumns - The array of time columns (e.g., ["Q1 2025", ...]).
- * @param {Date} today - The current date object.
- */
-function addTodayLine(gridEl, timeColumns, today) {
-  const position = findTodayColumnPosition(today, timeColumns);
-  if (!position) return; // Today is not in the chart's range
+  if (!taskName || !entity) {
+    return res.status(400).json({ error: "Missing taskName or entity" });
+  }
 
+  // 1. Define the "Analyst" prompt
+  const geminiSystemPrompt = `You are a senior project management analyst. Your job is to analyze the provided research and a user prompt to build a detailed analysis for *one single task*.
+  
+  The 'Research Content' may contain raw HTML (from .docx files) and Markdown (from .md files). You MUST parse these.
+  
+  You MUST respond with *only* a valid JSON object matching the 'analysisSchema'.
+  
+  **CRITICAL RULES FOR ANALYSIS:**
+  1.  **NO INFERENCE:** For 'taskName', 'facts', and 'assumptions', you MUST use key phrases and data extracted *directly* from the provided text.
+  2.  **CITE SOURCES & URLS (HIERARCHY):** You MUST find a source and a URL (if possible) for every 'fact' and 'assumption'. Follow this logic:
+      a.  **PRIORITY 1 (HTML Link):** Search for an HTML \`<a>\` tag near the fact.
+          - 'source': The text inside the tag (e.g., "example.com").
+          - 'url': The \`href\` attribute (e.g., "https://example.com/article/nine").
+      b.  **PRIORITY 2 (Markdown Link):** Search for a Markdown link \`[text](url)\` near the fact.
+          - 'source': The \`text\` part.
+          - 'url': The \`url\` part.
+      c.  **PRIORITY 3 (Fallback):** If no link is found, use the filename as the 'source'.
+          - 'source': The filename (e.g., "FileA.docx") from the \`--- Start of file: ... ---\` wrapper.
+          - 'url': You MUST set this to \`null\`.
+  3.  **DETERMINE STATUS:** Determine the task's 'status' ("completed", "in-progress", or "not-started") based on the current date (assume "November 2025") and the task's dates.
+  4.  **PROVIDE RATIONALE:** You MUST provide a 'rationale' for 'in-progress' and 'not-started' tasks, analyzing the likelihood of on-time completion based on the 'facts' and 'assumptions'.
+  5.  **CLEAN STRINGS:** All string values MUST be valid JSON strings. You MUST properly escape any characters that would break JSON, such as double quotes (\") and newlines (\\n).`;
+  
+  const geminiUserQuery = `Research Content:\n${researchTextCache}\n\n**YOUR TASK:** Provide a full, detailed analysis for this specific task:
+  - Entity: "${entity}"
+  - Task Name: "${taskName}"`;
+
+  // 2. Define the *single-task* schema
+  const analysisSchema = {
+    type: "OBJECT",
+    properties: {
+      taskName: { type: "STRING" },
+      startDate: { type: "STRING" },
+      endDate: { type: "STRING" },
+      status: { type: "STRING", enum: ["completed", "in-progress", "not-started", "n/a"] },
+      facts: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            fact: { type: "STRING" },
+            source: { type: "STRING" },
+            url: { type: "STRING" } // Can be a URL string or null
+          }
+        }
+      },
+      assumptions: {
+        type: "ARRAY",
+        items: {
+          type: "OBJECT",
+          properties: {
+            assumption: { type: "STRING" },
+            source: { type: "STRING" },
+            url: { type: "STRING" } // Can be a URL string or null
+          }
+        }
+      },
+      rationale: { type: "STRING" }, // For 'in-progress' or 'not-started'
+      summary: { type: "STRING" } // For 'completed'
+    },
+    required: ["taskName", "status"]
+  };
+  
+  // 3. Define the payload
+  const payload = {
+    contents: [{ parts: [{ text: geminiUserQuery }] }],
+    systemInstruction: { parts: [{ text: geminiSystemPrompt }] },
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: analysisSchema,
+      maxOutputTokens: 4096, // Plenty for a single task
+      temperature: 0,
+      topP: 1,
+      topK: 1
+    }
+  };
+
+  // 4. Call the API
   try {
-    // Get element dimensions for calculation
-    const labelCol = gridEl.querySelector('.gantt-header-label');
-    const headerRow = gridEl.querySelector('.gantt-header');
-    
-    if (!labelCol || !headerRow) return;
-
-    const labelColWidth = labelCol.offsetWidth;
-    const headerHeight = headerRow.offsetHeight;
-    const gridWidth = gridEl.offsetWidth;
-
-    // Calculate pixel position
-    const timeColAreaWidth = gridWidth - labelColWidth;
-    const oneColWidth = timeColAreaWidth / timeColumns.length;
-    const todayOffset = (position.index + position.percentage) * oneColWidth;
-    const lineLeftPosition = labelColWidth + todayOffset;
-
-    // Create and append the line
-    const todayLine = document.createElement('div');
-    todayLine.className = 'gantt-today-line';
-    todayLine.style.top = `${headerHeight}px`;
-    todayLine.style.bottom = '0';
-    todayLine.style.left = `${lineLeftPosition}px`;
-    
-    gridEl.appendChild(todayLine);
-
+    const analysisData = await callGeminiForJson(payload);
+    res.json(analysisData); // Send the single-task analysis back
   } catch (e) {
-    console.error("Error calculating 'Today' line position:", e);
+    console.error("Task Analysis API error:", e);
+    res.status(500).json({ error: `Error generating task analysis: ${e.message}` });
   }
-}
-
-/**
- * Finds the column index and percentage offset for today's date.
- * @param {Date} today - The current date.
- * @param {string[]} timeColumns - The array of time columns.
- * @returns {{index: number, percentage: number} | null}
- */
-function findTodayColumnPosition(today, timeColumns) {
-  if (timeColumns.length === 0) return null;
-
-  const firstCol = timeColumns[0];
-  const todayYear = today.getFullYear();
-
-  // 1. Check for Year columns (e.g., "2025")
-  if (/^\d{4}$/.test(firstCol)) {
-    const todayYearStr = todayYear.toString();
-    const index = timeColumns.indexOf(todayYearStr);
-    if (index === -1) return null;
-
-    const startOfYear = new Date(todayYear, 0, 1);
-    const endOfYear = new Date(todayYear, 11, 31);
-    const dayOfYear = (today - startOfYear) / (1000 * 60 * 60 * 24);
-    const totalDays = (endOfYear - startOfYear) / (1000 * 60 * 60 * 24);
-    const percentage = dayOfYear / totalDays;
-    return { index, percentage };
-  }
-
-  // 2. Check for Quarter columns (e.g., "Q4 2025")
-  if (/^Q[1-4]\s\d{4}$/.test(firstCol)) {
-    const month = today.getMonth();
-    const quarter = Math.floor(month / 3) + 1;
-    const todayQuarterStr = `Q${quarter} ${todayYear}`;
-    const index = timeColumns.indexOf(todayQuarterStr);
-    if (index === -1) return null;
-
-    const quarterStartMonth = (quarter - 1) * 3;
-    const startOfQuarter = new Date(todayYear, quarterStartMonth, 1);
-    const endOfQuarter = new Date(todayYear, quarterStartMonth + 3, 0); // 0th day of next month
-    const dayInQuarter = (today - startOfQuarter) / (1000 * 60 * 60 * 24);
-    const totalDays = (endOfQuarter - startOfQuarter) / (1000 * 60 * 60 * 24);
-    const percentage = dayInQuarter / totalDays;
-    return { index, percentage };
-  }
-
-  // 3. Check for Month columns (e.g., "Nov 2025")
-  if (/^[A-Za-z]{3}\s\d{4}$/.test(firstCol)) {
-    const todayMonthStr = today.toLocaleString('en-US', { month: 'short' }) + ` ${todayYear}`;
-    const index = timeColumns.indexOf(todayMonthStr);
-    if (index === -1) return null;
-
-    const startOfMonth = new Date(todayYear, today.getMonth(), 1);
-    const endOfMonth = new Date(todayYear, today.getMonth() + 1, 0);
-    const dayInMonth = today.getDate(); // 14th
-    const totalDays = endOfMonth.getDate(); // 30 for Nov
-    const percentage = dayInMonth / totalDays;
-    return { index, percentage };
-  }
-  
-  // 4. Check for Week columns (e.g., "W46 2025")
-  if (/^W\d{1,2}\s\d{4}$/.test(firstCol)) {
-    const todayWeekStr = `W${getWeek(today)} ${todayYear}`;
-    const index = timeColumns.indexOf(todayWeekStr);
-    if (index === -1) return null;
-
-    const dayOfWeek = today.getDay(); // 0 (Sun) - 6 (Sat)
-    const percentage = (dayOfWeek + 0.5) / 7; // Place line in middle of the day
-    return { index, percentage };
-  }
-
-  return null; // Unknown format
-}
-
-/**
- * Gets the ISO 8601 week number for a given date.
- * @param {Date} date - The date.
-S @returns {number} The week number.
- */
-function getWeek(date) {
-  var d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  var dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
-  return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
-}
+});
 
 
 // -------------------------------------------------------------------
-// --- "ON-DEMAND" ANALYSIS MODAL ---
+// --- NEW "ASK A QUESTION" ENDPOINT ---
 // -------------------------------------------------------------------
+app.post('/ask-question', async (req, res) => {
+  const { taskName, entity, question } = req.body;
 
-/**
- * Creates and shows the analysis modal.
- * Fetches data from the new /get-task-analysis endpoint.
- */
-async function showAnalysisModal(taskIdentifier) {
-  // 1. Remove any old modal
-  document.getElementById('analysis-modal')?.remove();
+  if (!taskName || !entity || !question) {
+    return res.status(400).json({ error: "Missing taskName, entity, or question" });
+  }
 
-  // 2. Create modal structure
-  const modalOverlay = document.createElement('div');
-  modalOverlay.id = 'analysis-modal';
-  modalOverlay.className = 'modal-overlay';
+  // 1. Define the "Grounded Q&A" prompt
+  const geminiSystemPrompt = `You are a project analyst. Your job is to answer a user's question about a specific task.
   
-  const modalContent = document.createElement('div');
-  modalContent.className = 'modal-content';
+  **CRITICAL RULES:**
+  1.  **GROUNDING:** You MUST answer the question *only* using the information in the provided 'Research Content'.
+  2.  **CONTEXT:** Your answer MUST be in the context of the task: "${taskName}" (for entity: "${entity}").
+  3.  **NO SPECULATION:** If the answer cannot be found in the 'Research Content', you MUST respond with "I'm sorry, I don't have enough information in the provided files to answer that question."
+  4.  **CONCISE:** Keep your answer concise and to the point.
+  5.  **NO PREAMBLE:** Do not start your response with "Based on the research..." just answer the question directly.`;
   
-  modalContent.innerHTML = `
-    <div class="modal-header">
-      <h3 class="modal-title">Analyzing...</h3>
-      <button class="modal-close" id="modal-close-btn">&times;</button>
-    </div>
-    <div class="modal-body" id="modal-body-content">
-      <div class="modal-spinner"></div>
-    </div>
-  `;
-  
-  modalOverlay.appendChild(modalContent);
-  document.body.appendChild(modalOverlay);
+  const geminiUserQuery = `Research Content:\n${researchTextCache}\n\n**User Question:** ${question}`;
 
-  // 3. Add close listeners
-  modalOverlay.addEventListener('click', (e) => {
-    if (e.target === modalOverlay) {
-      modalOverlay.remove();
+  // 2. Define the payload (no schema, simple text generation)
+  const payload = {
+    contents: [{ parts: [{ text: geminiUserQuery }] }],
+    systemInstruction: { parts: [{ text: geminiSystemPrompt }] },
+    generationConfig: {
+      maxOutputTokens: 1024,
+      temperature: 0.1, // Slight creativity for natural language
+      topP: 1,
+      topK: 1
     }
-  });
-  document.getElementById('modal-close-btn').addEventListener('click', () => {
-    modalOverlay.remove();
-  });
+  };
 
-  // 4. Fetch the analysis data
+  // 3. Call the *text* helper
   try {
-    const response = await fetch('/get-task-analysis', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(taskIdentifier)
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Server error");
-    }
-
-    const analysis = await response.json();
-    const modalBody = document.getElementById('modal-body-content');
-
-    // 5. Populate the modal with the analysis
-    document.querySelector('.modal-title').textContent = analysis.taskName;
-    modalBody.innerHTML = `
-      ${buildAnalysisSection('Status', `<span class="status-pill status-${analysis.status.replace(/\s+/g, '-').toLowerCase()}">${analysis.status}</span>`)}
-      ${buildAnalysisSection('Dates', `${analysis.startDate || 'N/A'} to ${analysis.endDate || 'N/A'}`)}
-      ${buildAnalysisList('Facts', analysis.facts, 'fact', 'source')}
-      ${buildAnalysisList('Assumptions', analysis.assumptions, 'assumption', 'source')}
-      ${buildAnalysisSection('Summary', analysis.summary)}
-      ${buildAnalysisSection('Rationale / Hurdles', analysis.rationale)}
-    `;
-
-    // 6. --- NEW: Add the chat interface ---
-    const chatContainer = document.createElement('div');
-    chatContainer.className = 'chat-container';
-    chatContainer.innerHTML = `
-      <h4 class="chat-title">Ask a follow-up</h4>
-      <div class="chat-history" id="chat-history"></div>
-      <form class="chat-form" id="chat-form">
-        <input type="text" id="chat-input" class="chat-input" placeholder="Ask about this task..." autocomplete="off">
-        <button type="submit" class="chat-send-btn">Send</button>
-      </form>
-    `;
-    modalBody.appendChild(chatContainer);
-
-    // 7. --- NEW: Add chat form listener ---
-    const chatForm = document.getElementById('chat-form');
-    chatForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      handleAskQuestion(taskIdentifier);
-    });
-
-  } catch (error) {
-    console.error("Error fetching analysis:", error);
-    document.getElementById('modal-body-content').innerHTML = `<div class="modal-error">Failed to load analysis: ${error.message}</div>`;
+    const textResponse = await callGeminiForText(payload);
+    res.json({ answer: textResponse }); // Send the text answer back
+  } catch (e) {
+    console.error("Q&A API error:", e);
+    res.status(500).json({ error: `Error generating answer: ${e.message}` });
   }
-}
-
-/**
- * --- NEW: Handles the chat form submission ---
- */
-async function handleAskQuestion(taskIdentifier) {
-  const chatInput = document.getElementById('chat-input');
-  const chatHistory = document.getElementById('chat-history');
-  const question = chatInput.value.trim();
-
-  if (!question) return;
-
-  // 1. Display user's question
-  const userMessage = document.createElement('div');
-  userMessage.className = 'chat-message chat-message-user';
-  userMessage.textContent = question;
-  chatHistory.appendChild(userMessage);
-
-  // 2. Show loading spinner
-  const loadingMessage = document.createElement('div');
-  loadingMessage.className = 'chat-message chat-message-llm';
-  loadingMessage.innerHTML = `<div class="chat-spinner"></div>`;
-  chatHistory.appendChild(loadingMessage);
-
-  // 3. Scroll to bottom
-  chatHistory.scrollTop = chatHistory.scrollHeight;
-
-  // 4. Clear input
-  chatInput.value = '';
-
-  // 5. Call the new API endpoint
-  try {
-    const response = await fetch('/ask-question', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...taskIdentifier,
-        question: question
-      })
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Server error");
-    }
-
-    const data = await response.json();
-    
-    // 6. Remove spinner and show answer
-    loadingMessage.innerHTML = data.answer; // Replace spinner with text
-
-  } catch (error) {
-    console.error("Error asking question:", error);
-    loadingMessage.innerHTML = `Sorry, an error occurred: ${error.message}`;
-  } finally {
-    // 7. Scroll to bottom again
-    chatHistory.scrollTop = chatHistory.scrollHeight;
-  }
-}
+});
 
 
-// Helper function to build a section of the modal
-function buildAnalysisSection(title, content) {
-  if (!content) return ''; // Don't show empty sections
-  return `
-    <div class="analysis-section">
-      <h4>${title}</h4>
-      <p>${content}</p>
-    </div>
-  `;
-}
-
-// Helper function to build a list of facts/assumptions
-function buildAnalysisList(title, items, itemKey, sourceKey) {
-  if (!items || items.length === 0) return '';
-  
-  const listItems = items.map(item => {
-    // --- MODIFICATION: Use the 'url' field from the server ---
-    const sourceText = item[sourceKey]; // e.g., "[example.com]"
-    const sourceUrl = item.url; // e.g., "https://example.com/article/nine" or null
-    let sourceElement = '';
-
-    // Check if sourceUrl is a valid, non-null string
-    if (sourceUrl && typeof sourceUrl === 'string' && (sourceUrl.startsWith('http') || sourceUrl.startsWith('www'))) {
-      // A valid URL was provided by the AI! Render a link.
-      sourceElement = `(Source: <a href="${sourceUrl}" target="_blank" rel="noopener noreferrer">${sourceText}</a>)`;
-    } else {
-      // No valid URL, just render plain text
-      sourceElement = `(Source: ${sourceText})`;
-    }
-
-    return `<li>
-      <p>${item[itemKey]}</p>
-      <span class="source">${sourceElement}</span>
-    </li>`;
-  }).join('');
-  
-  return `
-    <div class="analysis-section">
-      <h4>${title}</h4>
-      <ul class="analysis-list">${listItems}</ul>
-    </div>
-  `;
-}
-
-/**
- * --- NEW: Helper function to build the legend ---
- * @param {Array} legendData - Array of {color: string, label: string}
- * @returns {HTMLElement} The legend element
- */
-function buildLegend(legendData) {
-  const legendEl = document.createElement('div');
-  legendEl.className = 'gantt-legend';
-
-  const titleEl = document.createElement('h4');
-  titleEl.className = 'legend-title';
-  titleEl.textContent = 'Legend';
-  legendEl.appendChild(titleEl);
-
-  const listEl = document.createElement('div');
-  listEl.className = 'legend-list';
-  legendEl.appendChild(listEl);
-
-  for (const item of legendData) {
-    const itemEl = document.createElement('div');
-    itemEl.className = 'legend-item';
-    
-    const colorBox = document.createElement('span');
-    colorBox.className = 'legend-color-box';
-    colorBox.setAttribute('data-color', item.color); // Use data-color
-    
-    const labelEl = document.createElement('span');
-    labelEl.className = 'legend-label';
-    labelEl.textContent = item.label;
-    
-    itemEl.appendChild(colorBox);
-    itemEl.appendChild(labelEl);
-    listEl.appendChild(itemEl);
-  }
-  return legendEl;
-}
+// --- Server Start ---
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});

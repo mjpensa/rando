@@ -68,7 +68,7 @@
 .gantt-row-label.swimlane {
   font-weight: 600; /* BOLD SWIMLANE */
   color: #FFFFFF; /* Text Color */
-  background-color: #0c2340; /* Set swimlane title background */
+  background-color: #0C2340; /* Set swimlane title background */
 }
 
 .gantt-row-label.task {
@@ -77,7 +77,7 @@
   color: #FFFFFF; /* Text Color */
   border-bottom: 1px solid #0D0D0D; /* Grid line color */
   transition: background-color 0.2s;
-  background-color: #0c2340; /* Set task title background */
+  background-color: #354259; /* Set task title background */
 }
 
 .gantt-row-label.task:hover {
@@ -443,35 +443,36 @@
 /* --- GANTT LEGEND STYLES --- */
 /* ------------------------------------------------------------------- */
 .gantt-legend {
-  padding: 16px 24px;
+  padding: 20px 24px; /* Increased padding */
   border-top: 1px solid #0D0D0D; /* Grid line color */
-  background-color: #1A1A1A; /* Slightly darker background */
+  background-color: #0C2340; /* Set background to match swimlanes */
   color: #FFFFFF;
 }
 
 .legend-title {
-  font-size: 14px;
+  font-size: 16px; /* Increased font size */
   font-weight: 600;
-  margin: 0 0 12px 0;
+  margin: 0 0 16px 0; /* Increased bottom margin */
   color: #FFFFFF;
 }
 
 .legend-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 20px; /* Increased gap */
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px; /* Increased gap */
 }
 
 .legend-color-box {
-  width: 16px;
-  height: 16px;
+  width: 18px; /* Increased size */
+  height: 18px; /* Increased size */
   border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.2); /* Added subtle border */
 }
 
 /* Use data-color attributes for legend (NEW PALETTE) */
@@ -483,6 +484,6 @@
 
 
 .legend-label {
-  font-size: 13px;
+  font-size: 14px; /* Increased font size */
   color: #CCCCCC;
 }
