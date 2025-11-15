@@ -739,11 +739,13 @@ function setupChart(ganttData) {
   chartWrapper.appendChild(logoImg);
   // --- END: Add BIP Logo ---
 
-  // --- NEW: Add Vertical SVG (using direct innerHTML approach) ---
+  // --- NEW: Add Vertical SVG (matching footer approach exactly) ---
+  const encodedVerticalSVG = encodeURIComponent(verticalSVG.replace(/(\r\n|\n|\r)/gm, ""));
+
   const verticalSvgEl = document.createElement('div');
   verticalSvgEl.className = 'gantt-vertical-svg';
 
-  // Apply all styles inline
+  // Apply all styles inline, EXACTLY like the footer
   verticalSvgEl.style.position = 'absolute';
   verticalSvgEl.style.left = '0';
   verticalSvgEl.style.top = '0';
@@ -751,10 +753,11 @@ function setupChart(ganttData) {
   verticalSvgEl.style.height = '100%';
   verticalSvgEl.style.zIndex = '5';
   verticalSvgEl.style.pointerEvents = 'none';
-  verticalSvgEl.style.overflow = 'hidden';
 
-  // Insert SVG directly as HTML
-  verticalSvgEl.innerHTML = verticalSVG;
+  // Use background-image to repeat the pattern vertically (like footer uses repeat-x)
+  verticalSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedVerticalSVG}")`;
+  verticalSvgEl.style.backgroundRepeat = 'repeat-y';
+  verticalSvgEl.style.backgroundSize = '30px auto';
 
   // Don't append yet - we'll append it after the footer for consistency
   // --- END: Add Vertical SVG ---
