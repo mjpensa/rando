@@ -759,6 +759,10 @@ function setupChart(ganttData) {
   verticalSvgEl.style.backgroundRepeat = 'repeat-y';
   verticalSvgEl.style.backgroundSize = '30px auto';
 
+  // TEMPORARY DEBUG: Add highly visible background to verify element exists
+  verticalSvgEl.style.backgroundColor = '#FF0000'; // Bright red background for debugging
+  verticalSvgEl.style.opacity = '0.8'; // Make it semi-transparent so we can see it
+
   // Don't append yet - we'll append it after the footer for consistency
   // --- END: Add Vertical SVG ---
   
