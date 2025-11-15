@@ -42,24 +42,26 @@
 
 /* 9. Grid Header (Weeks) */
 .gantt-header {
-  font-size: 12px;
+  font-size: 14px; /* Increased from 12px */
   font-weight: 500;
   padding: 12px 8px;
   text-align: center;
   background-color: #da291c; /* Set time interval background color */
-  border-bottom: 1px solid #0D0D0D; /* Grid line color */
-  border-left: 1px solid #0D0D0D; /* Grid line color */
+  border-bottom: 1px solid #0D0D0D; /* Grid line color (Correctly not white) */
+  border-left: 1px solid #FFFFFF; /* Grid line color (CHANGED to white) */
+  border-top: 1px solid #FFFFFF; /* ADDED white top border */
   color: #FFFFFF; /* Text Color */
 }
 .gantt-header-label { /* First header cell (empty) */
-  border-left: 0;
-  /* background-color: #282828; */ /* Removed this override */
+  border-left: 0; /* Keep left border at 0 */
+  border-top: 1px solid #0D0D0D; /* OVERRIDE: Keep top border dark */
+  /* background-color: #28228; */ /* Removed this override */
 }
 
 /* 10. Row Label (Swimlane or Task) */
 .gantt-row-label {
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 13px; /* Base size */
   border-bottom: 1px solid #0D0D0D; /* Grid line color */
   white-space: normal; 
   overflow-wrap: break-word;
@@ -69,6 +71,7 @@
   font-weight: 600; /* BOLD SWIMLANE */
   color: #FFFFFF; /* Text Color */
   background-color: #0C2340; /* Set swimlane title background */
+  font-size: 15px; /* Increased from 13px */
 }
 
 .gantt-row-label.task {
@@ -78,6 +81,7 @@
   border-bottom: 1px solid #0D0D0D; /* Grid line color */
   transition: background-color 0.2s;
   background-color: #354259; /* Set task title background */
+  font-size: 14px; /* Increased from 13px */
 }
 
 .gantt-row-label.task:hover {
@@ -120,12 +124,12 @@
 }
 
 /* Bar Colors (NEW PALETTE) */
-.gantt-bar[data-color="light-grey"] { background-color: #F1F2F3; }
+.gantt-bar[data-color="priority-red"] { background-color: #961111; }
+.gantt-bar[data-color="medium-red"] { background-color: #FC6A62; }
 .gantt-bar[data-color="mid-grey"] { background-color: #7D8A99; }
-.gantt-bar[data-color="light-red"] { background-color: #FCB7B3; }
+.gantt-bar[data-color="light-grey"] { background-color: #DADEE2; }
+.gantt-bar[data-color="white"] { background-color: #FFFFFF; }
 .gantt-bar[data-color="dark-blue"] { background-color: #354259; }
-.gantt-bar[data-color="dark-red"] { background-color: #961111; }
-/* Deprecated colors removed */
 
 
 /* 13. Export Button Styling */
@@ -476,11 +480,12 @@
 }
 
 /* Use data-color attributes for legend (NEW PALETTE) */
-.legend-color-box[data-color="light-grey"] { background-color: #F1F2F3; }
+.legend-color-box[data-color="priority-red"] { background-color: #961111; }
+.legend-color-box[data-color="medium-red"] { background-color: #FC6A62; }
 .legend-color-box[data-color="mid-grey"] { background-color: #7D8A99; }
-.legend-color-box[data-color="light-red"] { background-color: #FCB7B3; }
+.legend-color-box[data-color="light-grey"] { background-color: #DADEE2; }
+.legend-color-box[data-color="white"] { background-color: #FFFFFF; }
 .legend-color-box[data-color="dark-blue"] { background-color: #354259; }
-.legend-color-box[data-color="dark-red"] { background-color: #961111; }
 
 
 .legend-label {
