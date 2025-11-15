@@ -5,7 +5,7 @@
   applied by main.js to the chart, modal, and chat interface.
   It is still required for the application to look correct.
 */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600&display=swap'); /* CHANGED */
 
 /* --- GANTT CHART STYLES --- */
 /* These are applied by main.js when building the chart */
@@ -19,7 +19,7 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   overflow: hidden;
   margin-top: 24px;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Work Sans', sans-serif; /* CHANGED */
 }
 
 /* 7. Chart Title */
@@ -28,7 +28,10 @@
   font-size: 20px;
   font-weight: 600;
   padding: 16px;
-  border-bottom: 1px solid #0D0D0D; /* Grid line color */
+  border-bottom: 1px solid #FFFFFF; /* CHANGED to white */
+  border-top: 1px solid #FFFFFF; /* ADDED white border */
+  border-left: 1px solid #FFFFFF; /* ADDED white border */
+  border-right: 1px solid #FFFFFF; /* ADDED white border */
   color: #FFFFFF; /* Text Color */
   background-color: #DA291C; /* Set title background color */
 }
@@ -137,10 +140,10 @@
   display: flex;
   justify-content: center;
   padding: 20px 0 0 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Work Sans', sans-serif; /* CHANGED */
 }
 .export-button {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Work Sans', sans-serif; /* CHANGED */
   font-size: 14px;
   font-weight: 600;
   color: #ffffff;
@@ -189,7 +192,7 @@
   z-index: 1000;
   padding: 24px;
   box-sizing: border-box;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Work Sans', sans-serif; /* CHANGED */
 }
 
 .modal-content {
@@ -418,7 +421,7 @@
 
 .chat-input {
   flex-grow: 1;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Work Sans', sans-serif; /* CHANGED */
   font-size: 14px;
   border: 1px solid #383838;
   border-radius: 6px;
@@ -428,7 +431,7 @@
 }
 
 .chat-send-btn {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Work Sans', sans-serif; /* CHANGED */
   font-size: 14px;
   font-weight: 600;
   color: #ffffff;
@@ -454,27 +457,27 @@
 }
 
 .legend-title {
-  font-size: 16px; /* Increased font size */
+  font-size: 32px; /* CHANGED from 16px */
   font-weight: 600;
-  margin: 0 0 16px 0; /* Increased bottom margin */
+  margin: 0 0 24px 0; /* CHANGED from 16px */
   color: #FFFFFF;
 }
 
 .legend-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px; /* Increased gap */
+  gap: 30px; /* CHANGED from 20px */
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 10px; /* Increased gap */
+  gap: 15px; /* CHANGED from 10px */
 }
 
 .legend-color-box {
-  width: 18px; /* Increased size */
-  height: 18px; /* Increased size */
+  width: 28px; /* CHANGED from 18px */
+  height: 28px; /* CHANGED from 18px */
   border-radius: 3px;
   border: 1px solid rgba(255, 255, 255, 0.2); /* Added subtle border */
 }
@@ -489,6 +492,6 @@
 
 
 .legend-label {
-  font-size: 14px; /* Increased font size */
+  font-size: 28px; /* CHANGED from 14px */
   color: #CCCCCC;
 }
