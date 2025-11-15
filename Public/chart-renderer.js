@@ -288,51 +288,56 @@ function setupChart(ganttData) {
   const verticalBorderEl = document.createElement('div');
   verticalBorderEl.style.position = 'absolute';
   verticalBorderEl.style.top = '0';
-  verticalBorderEl.style.left = '0'; // <-- FIX: Was 'right'
+  verticalBorderEl.style.left = '0'; 
   verticalBorderEl.style.bottom = '0';
-  verticalBorderEl.style.width = '30px'; // The width of the vertical bar
-  verticalBorderEl.style.overflow = 'hidden'; // Hide overflow
-  verticalBorderEl.style.zIndex = '5'; // Place it behind the logo
+  verticalBorderEl.style.width = '30px'; 
+  verticalBorderEl.style.overflow = 'hidden'; 
+  verticalBorderEl.style.zIndex = '5'; 
 
+  // --- FIX: Create a new inner element for the background ---
   const verticalInnerEl = document.createElement('div');
   
-  // Rotate the inner element so its "width" becomes vertical
-  verticalInnerEl.style.writingMode = 'vertical-rl';
-  verticalInnerEl.style.transform = 'rotate(180deg)';
-
-  // --- FIX: Use width: 100% and height: 30px ---
-  // This makes its vertical dimension (width) span the parent's height
-  // and its horizontal dimension (height) match the parent's width.
-  verticalInnerEl.style.width = '100%';
-  verticalInnerEl.style.height = '30px';
-  // --- END FIX ---
+  // --- FIX: Style the inner element ---
+  // We make it extremely tall and position it at the top
+  verticalInnerEl.style.position = 'absolute';
+  verticalInnerEl.style.left = '0';
+  verticalInnerEl.style.top = '0';
+  verticalInnerEl.style.width = '30px';
+  verticalInnerEl.style.height = '8000px'; // Arbitrarily tall
   
-  // Get the same encoded SVG string as the footer
+  // Get the encoded SVG
   const encodedSVG = encodeURIComponent(footerSVG.replace(/(\r\n|\n|\r)/gm, ""));
   
-  // Apply the same repeating background as the footer
+  // Apply the background, but ROTATED
   verticalInnerEl.style.backgroundImage = `url("data:image/svg+xml,${encodedSVG}")`;
-  verticalInnerEl.style.backgroundRepeat = 'repeat-x'; // Repeat along its "width" (now vertical)
-  verticalInnerEl.style.backgroundSize = '1280px 30px'; // Use native SVG dimensions
+  verticalInnerEl.style.backgroundRepeat = 'repeat-y'; // Repeat vertically
+  verticalInnerEl.style.backgroundSize = '30px 1280px'; // Flip dimensions
   
+  // Rotate the entire inner element
+  verticalInnerEl.style.transform = 'rotate(90deg)';
+  // Adjust transform origin to top left
+  verticalInnerEl.style.transformOrigin = 'top left';
+
+  // --- Adjust position post-rotation ---
+  // The rotation moves it, so we move it back
+  // Move it "left" by its new "height" (30px)
+  verticalInnerEl.style.left = '30px';
+
   verticalBorderEl.appendChild(verticalInnerEl);
   chartWrapper.appendChild(verticalBorderEl);
   // --- END: Add Vertical SVG Border ---
 
+
   // --- NEW: Add Footer SVG ---
-  // --- FIX: Apply SVG as a repeating background image to maintain aspect ratio ---
   const footerSvgEl = document.createElement('div');
   footerSvgEl.className = 'gantt-footer-svg';
   
-  // URL-encode the SVG string to use in a data URI
-  // We remove newlines and escape special chars
-  // --- FIX: Renamed variable to avoid re-declaration error ---
   const encodedSVGFooter = encodeURIComponent(footerSVG.replace(/(\r\n|\n|\r)/gm, ""));
 
-  footerSvgEl.style.height = '30px'; // Set the div height to match the SVG
+  footerSvgEl.style.height = '30px'; 
   footerSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedSVGFooter}")`;
-  footerSvgEl.style.backgroundRepeat = 'repeat-x'; // Repeat horizontally
-  footerSvgEl.style.backgroundSize = 'auto 30px'; // Scale height to fit, width is auto
+  footerSvgEl.style.backgroundRepeat = 'repeat-x'; 
+  footerSvgEl.style.backgroundSize = 'auto 30px'; 
   
   chartWrapper.appendChild(footerSvgEl);
   // --- END: Add Footer SVG ---
@@ -354,7 +359,6 @@ function setupChart(ganttData) {
   addExportListener();
 
   // --- NEW: Add "Today" Line ---
-  // We use the provided date: November 14, 2025 (Updated to current time)
   const today = new Date('2025-11-14T12:00:00'); 
   addTodayLine(gridEl, ganttData.timeColumns, today);
 }
