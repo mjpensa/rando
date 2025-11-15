@@ -307,6 +307,12 @@ function setupChart(ganttData) {
   verticalInnerEl.style.position = 'absolute';
   verticalInnerEl.style.top = '0';
   verticalInnerEl.style.left = '0';
+  // --- FIX: Add bottom: 0 and right: 0 to make the inner element fill the parent ---
+  verticalInnerEl.style.bottom = '0';
+  verticalInnerEl.style.right = '0';
+  // --- This makes width=100% (vertical) and height=100% (horizontal) correct ---
+  verticalInnerEl.style.width = '100%';
+  verticalInnerEl.style.height = '100%';
   
   // Get the same encoded SVG string as the footer
   const encodedSVG = encodeURIComponent(footerSVG.replace(/(\r\n|\n|\r)/gm, ""));
