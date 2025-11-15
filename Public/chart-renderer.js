@@ -327,10 +327,11 @@ function setupChart(ganttData) {
   
   // URL-encode the SVG string to use in a data URI
   // We remove newlines and escape special chars
-  const encodedSVG = encodeURIComponent(footerSVG.replace(/(\r\n|\n|\r)/gm, ""));
+  // --- FIX: Removed 'const' to avoid re-declaration ---
+  const encodedSVGFooter = encodeURIComponent(footerSVG.replace(/(\r\n|\n|\r)/gm, ""));
 
   footerSvgEl.style.height = '30px'; // Set the div height to match the SVG
-  footerSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedSVG}")`;
+  footerSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedSVGFooter}")`;
   footerSvgEl.style.backgroundRepeat = 'repeat-x'; // Repeat horizontally
   footerSvgEl.style.backgroundSize = 'auto 100%'; // Scale height to fit, width is auto
   
