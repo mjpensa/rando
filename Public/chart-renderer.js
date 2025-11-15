@@ -749,9 +749,10 @@ function setupChart(ganttData) {
   verticalSvgEl.style.position = 'absolute';
   verticalSvgEl.style.left = '0';
   verticalSvgEl.style.top = '0';
-  verticalSvgEl.style.height = '100%'; // Stretches the div
+  verticalSvgEl.style.bottom = '0'; // Ensure full height
   verticalSvgEl.style.width = '30px';
   verticalSvgEl.style.zIndex = '5'; // Higher z-index to ensure visibility above grid
+  verticalSvgEl.style.pointerEvents = 'none'; // Don't block interactions
 
   // Use background-image to repeat the pattern vertically
   verticalSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedVerticalSVG}")`;
@@ -765,12 +766,17 @@ function setupChart(ganttData) {
   const titleEl = document.createElement('div');
   titleEl.className = 'gantt-title';
   titleEl.textContent = ganttData.title;
+  // Add left margin to make room for vertical SVG
+  titleEl.style.marginLeft = '30px';
   chartWrapper.appendChild(titleEl);
 
   // Create Grid
   const gridEl = document.createElement('div');
   gridEl.className = 'gantt-grid';
-  
+  // Add left margin to make room for vertical SVG
+  gridEl.style.marginLeft = '30px';
+  gridEl.style.width = 'calc(100% - 30px)';
+
   // --- Dynamic Grid Columns ---
   const numCols = ganttData.timeColumns.length;
   // --- MODIFICATION: Increased min-width from 220px to 330px (50% wider) ---
@@ -1319,7 +1325,10 @@ function buildAnalysisList(title, items, itemKey, sourceKey) {
 function buildLegend(legendData) {
   const legendContainer = document.createElement('div');
   legendContainer.className = 'gantt-legend';
-  
+  // Add left margin to make room for vertical SVG
+  legendContainer.style.marginLeft = '30px';
+  legendContainer.style.width = 'calc(100% - 30px)';
+
   const title = document.createElement('h3');
   title.className = 'legend-title';
   title.textContent = 'Legend';
