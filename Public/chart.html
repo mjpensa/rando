@@ -14,7 +14,17 @@
     ></script>
     
     <!-- 2. Load the original chart styles (NO TAILWIND) -->
-    <link rel="stylesheet" href="/style.css" />
+    <!-- <link rel="stylesheet" href="/style.css" /> -->
+    <script>
+      // --- FIX: Cache-bust the CSS file ---
+      // This forces the browser to load the new CSS file and not use an old (cached) one.
+      const head = document.getElementsByTagName('head')[0];
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = '/style.css?t=' + new Date().getTime(); // Appends a unique timestamp
+      head.appendChild(link);
+    </script>
 
 </head>
 <body>
