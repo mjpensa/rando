@@ -881,11 +881,21 @@ function setupChart(ganttData) {
   container.appendChild(chartWrapper);
   container.appendChild(exportContainer);
 
+  // --- FIX: Set vertical SVG height after DOM is rendered ---
+  // Now that chartWrapper is in the DOM with all its content,
+  // we can get its actual rendered height and apply it to the vertical SVG
+  // Use setTimeout to ensure layout is complete
+  setTimeout(() => {
+    const actualHeight = chartWrapper.scrollHeight;
+    verticalSvgEl.style.height = `${actualHeight}px`;
+  }, 0);
+  // --- END FIX ---
+
   // Add Export Functionality
   addExportListener();
 
   // --- NEW: Add "Today" Line ---
-  const today = new Date('2025-11-14T12:00:00'); 
+  const today = new Date('2025-11-14T12:00:00');
   addTodayLine(gridEl, ganttData.timeColumns, today);
 }
 
