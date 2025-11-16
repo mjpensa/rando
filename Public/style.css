@@ -94,10 +94,11 @@
 
 /* 11. Bar Area */
 .gantt-bar-area {
-  position: relative; 
+  position: relative;
   display: grid;
   border-left: 1px solid #0D0D0D; /* Grid line color */
   border-bottom: 1px solid #0D0D0D; /* Grid line color */
+  align-items: stretch; /* Ensure grid children fill full height */
 }
 .gantt-bar-area.task:hover {
   background-color: #383838; /* Match label hover */
@@ -112,6 +113,8 @@
 /* Vertical grid lines */
 .gantt-bar-area span[data-col] {
   border-right: 1px solid #0D0D0D; /* Grid line color */
+  align-self: stretch; /* Ensure spans fill full height of grid cell */
+  min-height: 100%; /* Fallback to ensure full height */
 }
 
 /* 12. The Actual Bar */
