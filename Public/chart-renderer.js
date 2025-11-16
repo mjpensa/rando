@@ -727,8 +727,14 @@ function setupChart(ganttData) {
   // --- END: Add BIP Logo ---
 
   // --- NEW: Add Vertical SVG ---
-  // Match the footer SVG implementation pattern EXACTLY
-  const encodedVerticalSVG = encodeURIComponent(verticalSVG.replace(/(\r\n|\n|\r)/gm, ""));
+  // FIX: Change viewBox from "690 0 30 1280" to "0 0 30 1280" to match footer pattern
+  // AND adjust transform matrix from (720, 0) to (30, 0) to account for new viewBox origin
+  // Original: viewBox at x=690, transform x=720 -> content at 720-690=30 in viewBox
+  // New: viewBox at x=0, transform x=30 -> content at 30-0=30 in viewBox
+  const verticalSVGFixed = verticalSVG
+    .replace('viewBox="690 0 30 1280"', 'viewBox="0 0 30 1280"')
+    .replace('matrix(0 1 -1 0 720 0)', 'matrix(0 1 -1 0 30 0)');
+  const encodedVerticalSVG = encodeURIComponent(verticalSVGFixed.replace(/(\r\n|\n|\r)/gm, ""));
 
   const verticalSvgEl = document.createElement('div');
   verticalSvgEl.className = 'gantt-vertical-svg';
@@ -744,7 +750,7 @@ function setupChart(ganttData) {
   verticalSvgEl.style.backgroundRepeat = 'repeat-y';
   verticalSvgEl.style.backgroundSize = '30px auto';  // Match footer pattern: fixed width, auto height
 
-  console.log('Vertical SVG created matching footer pattern');
+  console.log('Vertical SVG created with fixed viewBox (0 0 30 1280)');
 
   chartWrapper.appendChild(verticalSvgEl);
   // --- END: Add Vertical SVG ---
