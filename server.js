@@ -6,6 +6,29 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import 'dotenv/config';
 
+// --- Environment Variable Validation ---
+function validateEnvironment() {
+  const required = ['API_KEY'];
+  const missing = required.filter(key => !process.env[key]);
+
+  if (missing.length > 0) {
+    console.error('❌ Missing required environment variables:', missing.join(', '));
+    console.error('Please create a .env file with the following:');
+    missing.forEach(key => console.error(`  ${key}=your_value_here`));
+    process.exit(1);
+  }
+
+  // Validate API_KEY format
+  if (process.env.API_KEY && process.env.API_KEY.length < 10) {
+    console.warn('⚠️  API_KEY looks suspicious - might be invalid (too short)');
+  }
+
+  console.log('✅ Environment variables validated');
+}
+
+// Validate environment before continuing
+validateEnvironment();
+
 // --- Gemini API Configuration ---
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${process.env.API_KEY}`;
 // ---
@@ -36,7 +59,12 @@ async function callGeminiForJson(payload, retryCount = 3) {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText = 'Unknown error';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          console.error('Failed to read error response:', e);
+        }
         throw new Error(`API call failed with status: ${response.status} - ${errorText}`);
       }
 
@@ -80,7 +108,12 @@ async function callGeminiForText(payload, retryCount = 3) {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText = 'Unknown error';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          console.error('Failed to read error response:', e);
+        }
         throw new Error(`API call failed with status: ${response.status} - ${errorText}`);
       }
 
@@ -366,8 +399,22 @@ ${researchTextCache}
 app.post('/ask-question', async (req, res) => {
   const { taskName, entity, question } = req.body;
 
-  if (!taskName || !entity || !question) {
-    return res.status(400).json({ error: "Missing taskName, entity, or question" });
+  // Enhanced input validation
+  if (!question || typeof question !== 'string' || !question.trim()) {
+    return res.status(400).json({ error: 'Question is required and must be non-empty' });
+  }
+
+  if (!entity || typeof entity !== 'string' || !entity.trim()) {
+    return res.status(400).json({ error: 'Entity is required' });
+  }
+
+  if (!taskName || typeof taskName !== 'string' || !taskName.trim()) {
+    return res.status(400).json({ error: 'Task name is required' });
+  }
+
+  // Limit question length to prevent abuse
+  if (question.trim().length > 1000) {
+    return res.status(400).json({ error: 'Question too long (max 1000 characters)' });
   }
 
   // 1. Define the "Grounded Q&A" prompt

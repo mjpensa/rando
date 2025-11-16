@@ -35,7 +35,10 @@
     -->
     <div id="chart-root"></div>
 
-    <!-- 3. Load the new chart rendering logic -->
+    <!-- 3. Load DOMPurify for XSS protection -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+
+    <!-- 4. Load the new chart rendering logic -->
     <script type="module" src="/chart-renderer.js"></script>
 
 </body>

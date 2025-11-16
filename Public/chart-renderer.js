@@ -25,8 +25,62 @@ async function loadSVGs() {
   }
 }
 
+// -------------------------------------------------------------------
+// --- SAFE DOM ACCESS HELPER FUNCTIONS ---
+// -------------------------------------------------------------------
+
+/**
+ * Safely gets DOM element by ID with error logging
+ * @param {string} id - Element ID
+ * @param {string} context - Context for error message
+ * @returns {HTMLElement|null}
+ */
+function safeGetElement(id, context = '') {
+  const element = document.getElementById(id);
+  if (!element) {
+    console.error(`Element not found: #${id}${context ? ` (in ${context})` : ''}`);
+  }
+  return element;
+}
+
+/**
+ * Safely queries DOM element with error logging
+ * @param {string} selector - CSS selector
+ * @param {string} context - Context for error message
+ * @returns {HTMLElement|null}
+ */
+function safeQuerySelector(selector, context = '') {
+  const element = document.querySelector(selector);
+  if (!element) {
+    console.error(`Element not found: ${selector}${context ? ` (in ${context})` : ''}`);
+  }
+  return element;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
-  const ganttData = JSON.parse(sessionStorage.getItem('ganttData'));
+  let ganttData = null;
+
+  // Safely parse ganttData from sessionStorage with error handling
+  try {
+    const stored = sessionStorage.getItem('ganttData');
+    if (stored) {
+      ganttData = JSON.parse(stored);
+
+      // Validate structure
+      if (!ganttData || typeof ganttData !== 'object') {
+        throw new Error('Invalid gantt data structure');
+      }
+
+      if (!Array.isArray(ganttData.data) || !ganttData.timeColumns) {
+        throw new Error('Gantt data missing required fields');
+      }
+    }
+  } catch (error) {
+    console.error('Failed to parse ganttData from sessionStorage:', error);
+    // Clear corrupted data
+    sessionStorage.removeItem('ganttData');
+    ganttData = null;
+  }
 
   if (ganttData) {
     // Load SVG graphics before rendering the chart
@@ -457,7 +511,7 @@ async function showAnalysisModal(taskIdentifier) {
       <button class="modal-close" id="modal-close-btn">&times;</button>
     </div>
     <div class="modal-body" id="modal-body-content">
-      <div classs="modal-spinner"></div>
+      <div class="modal-spinner"></div>
     </div>
   `;
   
@@ -483,23 +537,39 @@ async function showAnalysisModal(taskIdentifier) {
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Server error");
+      // Handle non-JSON error responses gracefully
+      let errorMessage = `Server error: ${response.status}`;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const err = await response.json();
+          errorMessage = err.error || errorMessage;
+        } else {
+          const text = await response.text();
+          errorMessage = text.substring(0, 200) || errorMessage; // Limit error length
+        }
+      } catch (parseError) {
+        console.error('Failed to parse error response:', parseError);
+      }
+      throw new Error(errorMessage);
     }
 
     const analysis = await response.json();
-    const modalBody = document.getElementById('modal-body-content');
+    const modalBody = safeGetElement('modal-body-content', 'showAnalysisModal');
+    if (!modalBody) return;
 
-    // 5. Populate the modal with the analysis
-    document.querySelector('.modal-title').textContent = analysis.taskName;
-    modalBody.innerHTML = `
-      ${buildAnalysisSection('Status', `<span class="status-pill status-${analysis.status.replace(/\s+/g, '-').toLowerCase()}">${analysis.status}</span>`)}
-      ${buildAnalysisSection('Dates', `${analysis.startDate || 'N/A'} to ${analysis.endDate || 'N/A'}`)}
+    // 5. Populate the modal with the analysis (sanitized to prevent XSS)
+    const modalTitle = safeQuerySelector('.modal-title', 'showAnalysisModal');
+    if (modalTitle) modalTitle.textContent = analysis.taskName;
+    const analysisHTML = `
+      ${buildAnalysisSection('Status', `<span class="status-pill status-${analysis.status.replace(/\s+/g, '-').toLowerCase()}">${DOMPurify.sanitize(analysis.status)}</span>`)}
+      ${buildAnalysisSection('Dates', `${DOMPurify.sanitize(analysis.startDate || 'N/A')} to ${DOMPurify.sanitize(analysis.endDate || 'N/A')}`)}
       ${buildAnalysisList('Facts', analysis.facts, 'fact', 'source')}
       ${buildAnalysisList('Assumptions', analysis.assumptions, 'assumption', 'source')}
       ${buildAnalysisSection('Summary', analysis.summary)}
       ${buildAnalysisSection('Rationale / Hurdles', analysis.rationale)}
     `;
+    modalBody.innerHTML = DOMPurify.sanitize(analysisHTML);
 
     // 6. --- NEW: Add the chat interface ---
     const chatContainer = document.createElement('div');
@@ -523,20 +593,28 @@ async function showAnalysisModal(taskIdentifier) {
 
   } catch (error) {
     console.error("Error fetching analysis:", error);
-    // --- FIX: Correctly close the innerHTML string ---
-    document.getElementById('modal-body-content').innerHTML = `<div class="modal-error">Failed to load analysis: ${error.message}</div>`;
+    // Use DOM methods to prevent XSS in error display
+    const modalBody = document.getElementById('modal-body-content');
+    if (modalBody) {
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'modal-error';
+      errorDiv.textContent = `Failed to load analysis: ${error.message}`;
+      modalBody.innerHTML = '';
+      modalBody.appendChild(errorDiv);
+    }
   }
-} // --- FIX: Added closing brace for showAnalysisModal ---
+}
 
 /**
  * Handles the "Send" button click in the chat modal.
  */
 async function handleAskQuestion(taskIdentifier) {
-  const input = document.getElementById('chat-input');
-  const history = document.getElementById('chat-history');
-  const sendBtn = document.querySelector('.chat-send-btn');
-  const question = input.value.trim();
+  const input = safeGetElement('chat-input', 'handleAskQuestion');
+  const sendBtn = safeQuerySelector('.chat-send-btn', 'handleAskQuestion');
 
+  if (!input || !sendBtn) return;
+
+  const question = input.value.trim();
   if (!question) return;
 
   // 1. Disable UI
@@ -563,50 +641,89 @@ async function handleAskQuestion(taskIdentifier) {
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Server error");
+      // Handle non-JSON error responses gracefully
+      let errorMessage = `Server error: ${response.status}`;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const err = await response.json();
+          errorMessage = err.error || errorMessage;
+        } else {
+          const text = await response.text();
+          errorMessage = text.substring(0, 200) || errorMessage; // Limit error length
+        }
+      } catch (parseError) {
+        console.error('Failed to parse error response:', parseError);
+      }
+      throw new Error(errorMessage);
     }
 
     const data = await response.json();
-    
-    // 5. Replace spinner with answer
+
+    // 5. Replace spinner with answer (sanitized to prevent XSS)
     const spinnerEl = document.getElementById(spinnerId);
     if (spinnerEl) {
-      spinnerEl.innerHTML = data.answer; // Replace spinner content with answer
+      spinnerEl.innerHTML = DOMPurify.sanitize(data.answer); // Sanitize LLM response
     } else {
       addMessageToHistory(data.answer, 'llm'); // Fallback
     }
     
   } catch (error) {
     console.error("Error asking question:", error);
-    // Replace spinner with error
+    // Replace spinner with error (using DOM methods to prevent XSS)
     const spinnerEl = document.getElementById(spinnerId);
-    const errorMsg = `<span style="color: #BA3930;">Error: ${error.message}</span>`;
+    const errorSpan = document.createElement('span');
+    errorSpan.style.color = '#BA3930';
+    errorSpan.textContent = `Error: ${error.message}`;
     if (spinnerEl) {
-      spinnerEl.innerHTML = errorMsg;
+      spinnerEl.innerHTML = ''; // Clear spinner
+      spinnerEl.appendChild(errorSpan);
     } else {
-      addMessageToHistory(errorMsg, 'llm'); // Fallback
+      // Fallback - add error as new message
+      const errorDiv = document.createElement('div');
+      errorDiv.className = 'chat-message chat-message-llm';
+      errorDiv.appendChild(errorSpan);
+      const history = document.getElementById('chat-history');
+      if (history) history.appendChild(errorDiv);
     }
   } finally {
-    // 6. Re-enable UI
-    input.disabled = false;
-    sendBtn.disabled = false;
-    input.focus();
+    // 6. Re-enable UI (with null checks)
+    if (input) {
+      input.disabled = false;
+      input.focus();
+    }
+    if (sendBtn) {
+      sendBtn.disabled = false;
+    }
   }
 }
 
 /**
  * Helper to add a message to the chat history UI.
+ * Sanitizes content based on message type to prevent XSS.
  */
 function addMessageToHistory(content, type, id = null) {
   const history = document.getElementById('chat-history');
+  if (!history) return; // Safety check
+
   const msg = document.createElement('div');
   msg.className = `chat-message chat-message-${type}`;
   if (id) {
     msg.id = id;
   }
-  msg.innerHTML = content;
-  
+
+  // Sanitize content based on sender type
+  if (type === 'llm') {
+    // LLM responses may have legitimate formatting, use DOMPurify
+    msg.innerHTML = DOMPurify.sanitize(content);
+  } else if (type === 'user') {
+    // User messages should never have HTML
+    msg.textContent = content;
+  } else {
+    // For other types (like spinner HTML), trust it if it comes from our code
+    msg.innerHTML = content;
+  }
+
   history.appendChild(msg);
   // Scroll to bottom
   history.scrollTop = history.scrollHeight;
@@ -618,15 +735,35 @@ function addMessageToHistory(content, type, id = null) {
 // -------------------------------------------------------------------
 
 /**
+ * Validates that a URL is safe (only http/https protocols).
+ * Prevents javascript: and other dangerous protocols.
+ * @param {string} url - The URL to validate
+ * @returns {boolean} - True if URL is safe
+ */
+function isSafeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    // Only allow http and https protocols
+    return ['http:', 'https:'].includes(parsed.protocol);
+  } catch (e) {
+    return false; // Invalid URL
+  }
+}
+
+/**
  * Builds an HTML string for a <section> in the modal.
  * Skips if content is null or empty.
+ * Content is sanitized to prevent XSS.
  */
 function buildAnalysisSection(title, content) {
   if (!content) return '';
+  // Sanitize title and content
+  const safeTitle = DOMPurify.sanitize(title);
+  const safeContent = DOMPurify.sanitize(content);
   return `
     <div class="analysis-section">
-      <h4>${title}</h4>
-      <p>${content}</p>
+      <h4>${safeTitle}</h4>
+      <p>${safeContent}</p>
     </div>
   `;
 }
@@ -634,28 +771,33 @@ function buildAnalysisSection(title, content) {
 /**
  * Builds an HTML string for a <ul> of facts/assumptions.
  * Skips if list is null or empty.
+ * Content is sanitized to prevent XSS.
  */
 function buildAnalysisList(title, items, itemKey, sourceKey) {
   if (!items || items.length === 0) return '';
-  
+
   const listItems = items.map(item => {
-    let sourceText = item[sourceKey] || 'Source not available';
-    // If URL is present, make the source a link
-    if (item.url) {
-      sourceText = `<a href="${item.url}" target="_blank" rel="noopener noreferrer">${sourceText}</a>`;
+    const itemText = DOMPurify.sanitize(item[itemKey] || '');
+    let sourceText = DOMPurify.sanitize(item[sourceKey] || 'Source not available');
+
+    // If URL is present, validate and make the source a link
+    if (item.url && isSafeUrl(item.url)) {
+      const safeUrl = DOMPurify.sanitize(item.url);
+      sourceText = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${sourceText}</a>`;
     }
-    
+
     return `
       <li>
-        <p>${item[itemKey]}</p>
+        <p>${itemText}</p>
         <p class="source">${sourceText}</p>
       </li>
     `;
   }).join('');
-  
+
+  const safeTitle = DOMPurify.sanitize(title);
   return `
     <div class="analysis-section">
-      <h4>${title}</h4>
+      <h4>${safeTitle}</h4>
       <ul class="analysis-list">
         ${listItems}
       </ul>

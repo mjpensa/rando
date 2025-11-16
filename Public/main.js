@@ -153,35 +153,39 @@ async function handleChartGenerate(event) {
   const errorMessage = document.getElementById('error-message');
   const chartOutput = document.getElementById('chart-output');
 
-  // 1. Get form data
-  const promptInput = document.getElementById('prompt-input');
-  const fileInput = document.getElementById('file-input');
-  
-  // Check if files are uploaded
-  if (fileInput.files.length === 0) {
-    displayError('Error: Please upload at least one research document.');
-    return;
-  }
-  
-  // Check if prompt is empty (optional but good practice)
-  if (!promptInput.value.trim()) {
-      displayError('Error: Please provide project instructions in the prompt.');
-      return;
-  }
-
-  const formData = new FormData();
-  formData.append('prompt', promptInput.value);
-  for (const file of fileInput.files) {
-    formData.append('researchFiles', file);
-  }
-
-  // 2. Update UI to show loading
+  // Disable button IMMEDIATELY to prevent double-clicks (race condition fix)
+  if (generateBtn.disabled) return; // Already processing
   generateBtn.disabled = true;
-  loadingIndicator.style.display = 'flex';
-  errorMessage.style.display = 'none';
-  chartOutput.innerHTML = ''; // Clear old chart
+
+  const originalBtnText = generateBtn.textContent;
+  generateBtn.textContent = 'Generating...';
 
   try {
+    // 1. Get form data
+    const promptInput = document.getElementById('prompt-input');
+    const fileInput = document.getElementById('file-input');
+
+    // 2. Validate inputs
+    if (fileInput.files.length === 0) {
+      displayError('Error: Please upload at least one research document.');
+      return; // Will re-enable button in finally block
+    }
+
+    if (!promptInput.value.trim()) {
+      displayError('Error: Please provide project instructions in the prompt.');
+      return; // Will re-enable button in finally block
+    }
+
+    const formData = new FormData();
+    formData.append('prompt', promptInput.value);
+    for (const file of fileInput.files) {
+      formData.append('researchFiles', file);
+    }
+
+    // 3. Update UI to show loading
+    loadingIndicator.style.display = 'flex';
+    errorMessage.style.display = 'none';
+    chartOutput.innerHTML = ''; // Clear old chart
     // 3. Call the backend API (for the *initial* chart)
     const response = await fetch('/generate-chart', {
       method: 'POST',
@@ -189,8 +193,21 @@ async function handleChartGenerate(event) {
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || `Server error: ${response.status}`);
+      // Handle non-JSON error responses gracefully
+      let errorMessage = `Server error: ${response.status}`;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const err = await response.json();
+          errorMessage = err.error || errorMessage;
+        } else {
+          const text = await response.text();
+          errorMessage = text.substring(0, 200) || errorMessage; // Limit error length
+        }
+      } catch (parseError) {
+        console.error('Failed to parse error response:', parseError);
+      }
+      throw new Error(errorMessage);
     }
 
     // 4. Get the JSON data from the server
@@ -220,8 +237,9 @@ async function handleChartGenerate(event) {
     errorMessage.textContent = `Error: ${error.message}`;
     errorMessage.style.display = 'block';
   } finally {
-    // 7. Restore UI
+    // 7. Restore UI (always re-enable button)
     generateBtn.disabled = false;
+    generateBtn.textContent = originalBtnText;
     loadingIndicator.style.display = 'none';
   }
 }
