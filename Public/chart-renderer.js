@@ -6,23 +6,17 @@
 
 // --- SVG Graphics Loading ---
 // Load SVG graphics from external files
-let verticalSVG = '';
 let footerSVG = '';
 
 /**
- * Loads vertical and horizontal SVG graphics for the chart decorations.
- * These SVGs are used for the left border and footer stripe patterns.
+ * Loads horizontal SVG graphics for the chart decorations.
+ * These SVGs are used for the footer stripe pattern.
  * @async
  * @returns {Promise<void>}
  */
 async function loadSVGs() {
   try {
-    const [verticalResponse, footerResponse] = await Promise.all([
-      fetch('/vertical-stripe2.svg?v=2'),
-      fetch('/horizontal-stripe.svg')
-    ]);
-
-    verticalSVG = await verticalResponse.text();
+    const footerResponse = await fetch('/horizontal-stripe.svg');
     footerSVG = await footerResponse.text();
 
     console.log('SVG graphics loaded successfully');
@@ -164,73 +158,15 @@ function setupChart(ganttData) {
   chartWrapper.appendChild(logoImg);
   // --- END: Add BIP Logo ---
 
-  // --- NEW: Add Vertical SVG ---
-  // Since viewBox causes issues, use the working approach: remove viewBox and insert directly
-  const verticalSVGNoViewBox = verticalSVG
-    .replace(/viewBox="[^"]*"/, '')
-    .replace(/width="[^"]*"/, '')
-    .replace(/height="[^"]*"/, '')
-    .replace(/overflow="[^"]*"/, '');
-
-  // Create wrapper with white background
-  const verticalSvgWrapper = document.createElement('div');
-  verticalSvgWrapper.className = 'gantt-vertical-svg';
-  verticalSvgWrapper.style.position = 'absolute';
-  verticalSvgWrapper.style.left = '0';
-  verticalSvgWrapper.style.top = '0';
-  verticalSvgWrapper.style.width = '30px';
-  verticalSvgWrapper.style.height = '100%';
-  verticalSvgWrapper.style.zIndex = '5';
-  verticalSvgWrapper.style.backgroundColor = 'white';
-  verticalSvgWrapper.style.overflow = 'hidden';
-
-  // Insert SVG - we'll clone it multiple times to create repeating effect
-  verticalSvgWrapper.innerHTML = verticalSVGNoViewBox;
-
-  const svgElement = verticalSvgWrapper.querySelector('svg');
-  if (svgElement) {
-    svgElement.style.display = 'block';
-    svgElement.style.width = '30px';
-    svgElement.style.height = 'auto';
-
-    // Calculate how many SVG clones we actually need
-    // Estimate chart height based on number of rows (tasks + swimlanes)
-    const estimatedRowHeight = 40; // px per task row (approximate)
-    const totalRows = ganttData.data.length + 1; // +1 for header
-    const estimatedChartHeight = totalRows * estimatedRowHeight;
-
-    // SVG natural height is ~1280px based on paths
-    const svgNaturalHeight = 1280;
-    const clonesNeeded = Math.ceil(estimatedChartHeight / svgNaturalHeight);
-
-    // Add small buffer but cap at reasonable max to prevent memory issues
-    const clonesToCreate = Math.min(clonesNeeded + 1, 15);
-
-    for (let i = 0; i < clonesToCreate; i++) {
-      const clone = svgElement.cloneNode(true);
-      verticalSvgWrapper.appendChild(clone);
-    }
-
-    console.log(`Vertical SVG inserted with ${clonesToCreate} clones (calculated from ${totalRows} rows)`);
-  }
-
-  chartWrapper.appendChild(verticalSvgWrapper);
-  // --- END: Add Vertical SVG ---
-  
   // Add Title (from data)
   const titleEl = document.createElement('div');
   titleEl.className = 'gantt-title';
   titleEl.textContent = ganttData.title;
-  // Add left margin to make room for vertical SVG
-  titleEl.style.marginLeft = '30px';
   chartWrapper.appendChild(titleEl);
 
   // Create Grid
   const gridEl = document.createElement('div');
   gridEl.className = 'gantt-grid';
-  // Add left margin to make room for vertical SVG
-  gridEl.style.marginLeft = '30px';
-  gridEl.style.width = 'calc(100% - 30px)';
 
   // --- Dynamic Grid Columns ---
   const numCols = ganttData.timeColumns.length;
@@ -304,25 +240,17 @@ function setupChart(ganttData) {
   }
   // --- END: Add Legend ---
 
-  // --- VERTICAL SVG BORDER BLOCK REMOVED ---
-
-
   // --- NEW: Add Footer SVG ---
-  // --- FIX: Reverting to the original, fully inline-styled implementation ---
   const encodedFooterSVG = encodeURIComponent(footerSVG.replace(/(\r\n|\n|\r)/gm, ""));
 
   const footerSvgEl = document.createElement('div');
   footerSvgEl.className = 'gantt-footer-svg';
 
-  // Apply all styles inline, just like the original code
+  // Apply all styles inline
   footerSvgEl.style.height = '30px';
   footerSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedFooterSVG}")`;
   footerSvgEl.style.backgroundRepeat = 'repeat-x';
   footerSvgEl.style.backgroundSize = 'auto 30px';
-
-  // Also add the new styles for margin/width
-  footerSvgEl.style.width = 'calc(100% - 30px)';
-  footerSvgEl.style.marginLeft = '30px';
 
   chartWrapper.appendChild(footerSvgEl);
   // --- END: Add Footer SVG ---
@@ -887,9 +815,6 @@ function buildAnalysisList(title, items, itemKey, sourceKey) {
 function buildLegend(legendData) {
   const legendContainer = document.createElement('div');
   legendContainer.className = 'gantt-legend';
-  // Add left margin to make room for vertical SVG
-  legendContainer.style.marginLeft = '30px';
-  legendContainer.style.width = 'calc(100% - 30px)';
 
   const title = document.createElement('h3');
   title.className = 'legend-title';
