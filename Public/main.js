@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
     dropzoneLabel.classList.remove('border-custom-outline');
   });
 
-  dropzoneLabel.addEventListener('dragleave', () => {
+  dropzoneLabel.addEventListener('dragleave', (event) => {
     // Check if the cursor is actually leaving the element
     if (!dropzoneLabel.contains(document.elementFromPoint(event.clientX, event.clientY))) {
         dropzoneLabel.classList.remove('border-white');
