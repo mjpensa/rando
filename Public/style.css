@@ -26,9 +26,9 @@
 /* 7. Chart Title */
 .gantt-title {
   text-align: center;
-  font-size: 28px;
-  font-weight: 600;
-  padding: 16px;
+  font-size: 36px; /* Increased from 28px for better readability */
+  font-weight: 700; /* Increased from 600 for better readability */
+  padding: 20px; /* Increased from 16px to match larger text */
   border-bottom: 1px solid #0D0D0D; /* CHANGED to black */
   border-top: 1px solid #0D0D0D; /* CHANGED to black */
   border-left: 1px solid #0D0D0D; /* CHANGED to black */
@@ -46,9 +46,9 @@
 
 /* 9. Grid Header (Weeks) */
 .gantt-header {
-  font-size: 18px; /* Increased from 14px */
-  font-weight: 500;
-  padding: 12px 8px;
+  font-size: 24px; /* Increased from 18px for better readability */
+  font-weight: 600; /* Increased from 500 for better readability */
+  padding: 14px 10px; /* Increased padding to match larger text */
   text-align: center;
   background-color: #0c2340; /* CHANGED to new color */
   border-bottom: 1px solid #0D0D0D; /* Grid line color (Correctly not white) */
@@ -72,20 +72,22 @@
 }
 
 .gantt-row-label.swimlane {
-  font-weight: 600; /* BOLD SWIMLANE */
+  font-weight: 700; /* Increased from 600 for better readability */
   color: #FFFFFF; /* Text Color */
   background-color: #0C2340; /* Set swimlane title background */
-  font-size: 20px; /* Increased from 15px */
+  font-size: 28px; /* Increased from 20px for better readability */
+  padding: 14px 16px; /* Increased padding to match larger text */
 }
 
 .gantt-row-label.task {
-  padding-left: 24px; /* THIS is our indent */
-  font-weight: 400;
+  padding: 12px 14px; /* Increased base padding for larger text */
+  padding-left: 32px; /* Increased indent from 24px */
+  font-weight: 500; /* Increased from 400 for better readability */
   color: #FFFFFF; /* Text Color */
   border-bottom: 1px solid #0D0D0D; /* Grid line color */
   transition: background-color 0.2s;
   background-color: #354259; /* Set task title background */
-  font-size: 18px; /* Increased from 14px */
+  font-size: 24px; /* Increased from 18px for better readability */
 }
 
 .gantt-row-label.task:hover {
