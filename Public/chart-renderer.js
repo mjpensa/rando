@@ -727,32 +727,45 @@ function setupChart(ganttData) {
   // --- END: Add BIP Logo ---
 
   // --- NEW: Add Vertical SVG ---
-  // FIX: Change viewBox from "690 0 30 1280" to "0 0 30 1280" to match footer pattern
-  // AND adjust transform matrix from (720, 0) to (30, 0) to account for new viewBox origin
-  // Original: viewBox at x=690, transform x=720 -> content at 720-690=30 in viewBox
-  // New: viewBox at x=0, transform x=30 -> content at 30-0=30 in viewBox
-  const verticalSVGFixed = verticalSVG
-    .replace('viewBox="690 0 30 1280"', 'viewBox="0 0 30 1280"')
-    .replace('matrix(0 1 -1 0 720 0)', 'matrix(0 1 -1 0 30 0)');
-  const encodedVerticalSVG = encodeURIComponent(verticalSVGFixed.replace(/(\r\n|\n|\r)/gm, ""));
+  // Since viewBox causes issues, use the working approach: remove viewBox and insert directly
+  const verticalSVGNoViewBox = verticalSVG
+    .replace(/viewBox="[^"]*"/, '')
+    .replace(/width="[^"]*"/, '')
+    .replace(/height="[^"]*"/, '')
+    .replace(/overflow="[^"]*"/, '');
 
-  const verticalSvgEl = document.createElement('div');
-  verticalSvgEl.className = 'gantt-vertical-svg';
+  // Create wrapper with white background
+  const verticalSvgWrapper = document.createElement('div');
+  verticalSvgWrapper.className = 'gantt-vertical-svg';
+  verticalSvgWrapper.style.position = 'absolute';
+  verticalSvgWrapper.style.left = '0';
+  verticalSvgWrapper.style.top = '0';
+  verticalSvgWrapper.style.width = '30px';
+  verticalSvgWrapper.style.height = '100%';
+  verticalSvgWrapper.style.zIndex = '5';
+  verticalSvgWrapper.style.backgroundColor = 'white';
+  verticalSvgWrapper.style.overflow = 'hidden';
 
-  // Apply styles matching footer approach
-  verticalSvgEl.style.position = 'absolute';
-  verticalSvgEl.style.left = '0';
-  verticalSvgEl.style.top = '0';
-  verticalSvgEl.style.bottom = '0';
-  verticalSvgEl.style.width = '30px';
-  verticalSvgEl.style.zIndex = '5';
-  verticalSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedVerticalSVG}")`;
-  verticalSvgEl.style.backgroundRepeat = 'repeat-y';
-  verticalSvgEl.style.backgroundSize = '30px auto';  // Match footer pattern: fixed width, auto height
+  // Insert SVG - we'll clone it multiple times to create repeating effect
+  verticalSvgWrapper.innerHTML = verticalSVGNoViewBox;
 
-  console.log('Vertical SVG created with fixed viewBox (0 0 30 1280)');
+  const svgElement = verticalSvgWrapper.querySelector('svg');
+  if (svgElement) {
+    svgElement.style.display = 'block';
+    svgElement.style.width = '30px';
+    svgElement.style.height = 'auto';
 
-  chartWrapper.appendChild(verticalSvgEl);
+    // Clone the SVG multiple times to fill the height
+    // SVG natural height is ~1280px based on paths, clone enough to cover tall charts
+    for (let i = 0; i < 10; i++) {  // 10 copies should cover most charts
+      const clone = svgElement.cloneNode(true);
+      verticalSvgWrapper.appendChild(clone);
+    }
+
+    console.log('Vertical SVG inserted with 10 clones for repeating pattern');
+  }
+
+  chartWrapper.appendChild(verticalSvgWrapper);
   // --- END: Add Vertical SVG ---
   
   // Add Title (from data)
