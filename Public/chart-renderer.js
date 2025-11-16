@@ -727,24 +727,35 @@ function setupChart(ganttData) {
   // --- END: Add BIP Logo ---
 
   // --- NEW: Add Vertical SVG ---
-  // --- FIX: Reverting to the original, fully inline-styled implementation ---
-  const encodedVerticalSVG = encodeURIComponent(verticalSVG.replace(/(\r\n|\n|\r)/gm, ""));
+  // Create a wrapper div for the SVG
+  const verticalSvgWrapper = document.createElement('div');
+  verticalSvgWrapper.className = 'gantt-vertical-svg-wrapper';
+  verticalSvgWrapper.style.position = 'absolute';
+  verticalSvgWrapper.style.left = '0';
+  verticalSvgWrapper.style.top = '0';
+  verticalSvgWrapper.style.bottom = '0';
+  verticalSvgWrapper.style.width = '30px';
+  verticalSvgWrapper.style.zIndex = '5';
+  verticalSvgWrapper.style.overflow = 'hidden';
 
-  const verticalSvgEl = document.createElement('div');
-  verticalSvgEl.className = 'gantt-vertical-svg';
+  // Insert the SVG directly as HTML
+  verticalSvgWrapper.innerHTML = verticalSVG;
 
-  // Apply all styles inline, just like the original code
-  verticalSvgEl.style.position = 'absolute';
-  verticalSvgEl.style.left = '0';
-  verticalSvgEl.style.top = '0';
-  verticalSvgEl.style.bottom = '0';  // Use bottom: 0 instead of height calculation
-  verticalSvgEl.style.width = '30px';
-  verticalSvgEl.style.zIndex = '5';
-  verticalSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedVerticalSVG}")`;
-  verticalSvgEl.style.backgroundRepeat = 'repeat-y';
-  verticalSvgEl.style.backgroundSize = '30px 1280px';
+  // Style the SVG element inside
+  const svgElement = verticalSvgWrapper.querySelector('svg');
+  if (svgElement) {
+    // Set preserveAspectRatio to "none" so SVG stretches to fill container
+    svgElement.setAttribute('preserveAspectRatio', 'none');
+    svgElement.style.display = 'block';
+    svgElement.style.width = '100%';
+    svgElement.style.height = '100%';
+    console.log('Vertical SVG element created and styled');
+    console.log('SVG viewBox:', svgElement.getAttribute('viewBox'));
+  } else {
+    console.error('SVG element not found in verticalSVG string');
+  }
 
-  chartWrapper.appendChild(verticalSvgEl);
+  chartWrapper.appendChild(verticalSvgWrapper);
   // --- END: Add Vertical SVG ---
   
   // Add Title (from data)
