@@ -29,10 +29,7 @@
   font-size: 40px; /* Increased from 36px for better readability */
   font-weight: 700; /* Increased from 600 for better readability */
   padding: 22px; /* Increased from 20px to match larger text */
-  border-bottom: 1px solid #0D0D0D; /* CHANGED to black */
-  border-top: 1px solid #0D0D0D; /* CHANGED to black */
-  border-left: 1px solid #0D0D0D; /* CHANGED to black */
-  border-right: 1px solid #0D0D0D; /* CHANGED to black */
+  border-bottom: 1px solid #0D0D0D; /* Only bottom border to separate from grid */
   color: #FFFFFF; /* Text Color */
   background-color: #0c2340; /* CHANGED to new color */
 }
