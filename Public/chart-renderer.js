@@ -727,30 +727,26 @@ function setupChart(ganttData) {
   // --- END: Add BIP Logo ---
 
   // --- NEW: Add Vertical SVG ---
-  // Create SVG without viewBox for repeating pattern
-  const verticalSVGNoViewBox = verticalSVG.replace(/viewBox="[^"]*"/, '');
-  const encodedSVG = encodeURIComponent(verticalSVGNoViewBox.replace(/(\r\n|\n|\r)/gm, ""));
+  // Match the footer SVG implementation pattern EXACTLY
+  const encodedVerticalSVG = encodeURIComponent(verticalSVG.replace(/(\r\n|\n|\r)/gm, ""));
 
-  // Create a wrapper div for the repeating SVG background
-  const verticalSvgWrapper = document.createElement('div');
-  verticalSvgWrapper.className = 'gantt-vertical-svg-wrapper';
-  verticalSvgWrapper.style.position = 'absolute';
-  verticalSvgWrapper.style.left = '0';
-  verticalSvgWrapper.style.top = '0';
-  verticalSvgWrapper.style.bottom = '0';
-  verticalSvgWrapper.style.width = '30px';
-  verticalSvgWrapper.style.zIndex = '5';
+  const verticalSvgEl = document.createElement('div');
+  verticalSvgEl.className = 'gantt-vertical-svg';
 
-  // Use the SVG as a repeating background image
-  verticalSvgWrapper.style.backgroundColor = 'white';
-  verticalSvgWrapper.style.backgroundImage = `url("data:image/svg+xml,${encodedSVG}")`;
-  verticalSvgWrapper.style.backgroundRepeat = 'repeat-y';
-  verticalSvgWrapper.style.backgroundSize = '30px auto';  // 30px wide, auto height to maintain aspect ratio
-  verticalSvgWrapper.style.backgroundPosition = 'left top';
+  // Apply styles matching footer approach
+  verticalSvgEl.style.position = 'absolute';
+  verticalSvgEl.style.left = '0';
+  verticalSvgEl.style.top = '0';
+  verticalSvgEl.style.bottom = '0';
+  verticalSvgEl.style.width = '30px';
+  verticalSvgEl.style.zIndex = '5';
+  verticalSvgEl.style.backgroundImage = `url("data:image/svg+xml,${encodedVerticalSVG}")`;
+  verticalSvgEl.style.backgroundRepeat = 'repeat-y';
+  verticalSvgEl.style.backgroundSize = '30px auto';  // Match footer pattern: fixed width, auto height
 
-  console.log('Vertical SVG wrapper created with repeating background');
+  console.log('Vertical SVG created matching footer pattern');
 
-  chartWrapper.appendChild(verticalSvgWrapper);
+  chartWrapper.appendChild(verticalSvgEl);
   // --- END: Add Vertical SVG ---
   
   // Add Title (from data)
