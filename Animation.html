@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Touch Bar Animation: Chihuahua & Parakeet</title>
+    <style>
+        body {
+            background-color: #222;
+            color: #ccc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+        h1 { font-size: 1.2rem; margin-bottom: 1rem; color: #fff; }
+        .canvas-wrapper {
+            padding: 10px;
+            background: #111;
+            border: 1px solid #444;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-width: 95vw;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        canvas {
+            background-color: #000000; /* Touch Bar Black */
+            display: block;
+            /* The Touch Bar is physically 2170px wide (native). 
+               We render at native resolution for crispness.
+            */
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        button {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        button:hover { background: #444; }
+        button.primary { background: #007aff; border-color: #007aff; }
+        button.primary:hover { background: #0056b3; }
+        
+        .instructions {
+            margin-top: 30px;
+            font-size: 0.85rem;
+            color: #888;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.4;
+        }
+        code { background: #333; padding: 2px 4px; border-radius: 3px; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <h1>Touch Bar Preview (2170 x 60)</h1>
+    
+    <div class="canvas-wrapper">
+        <canvas id="touchBarCanvas" width="2170" height="60"></canvas>
+    </div>
+
+    <div class="controls">
+        <button class="primary" onclick="toggleAnimation()">Pause / Play</button>
+        <button onclick="resetAnimation()">Reset Chase</button>
+    </div>
+
+    <div class="instructions">
+        <p><strong>To use this:</strong></p>
+        <p>1. Use macOS Screen Recorder (<code>Cmd + Shift + 5</code>).</p>
+        <p>2. Select "Record Selected Portion" and drag the box around the black bar above.</p>
+        <p>3. Record for ~5 seconds (one full loop).</p>
+        <p>4. Import the resulting video into BetterTouchTool.</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('touchBarCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- CONFIGURATION ---
+        let isPlaying = true;
+        let frameCount = 0;
+        
+        // Entity Start Positions
+        // The bar is 2170px wide. We start them off-screen left (-100).
+        let dogX = -100;
+        let birdX = 250; // Bird maintains a lead
+        const speed = 7; // Speed of the chase (higher = faster)
+
+        // --- DRAWING ---
+
+        function drawParakeet(x, y, frame) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Bird Body
+            ctx.fillStyle = "#32CD32"; // Lime Green
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 22, 10, 0, 0, Math.PI * 2); // Body
+            ctx.fill();
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(14, -6, 9, 0, Math.PI * 2); // Head
+            ctx.fill();
+
+            // Beak
+            ctx.fillStyle = "#FFD700"; // Gold
+            ctx.beginPath();
+            ctx.moveTo(20, -6);
+            ctx.lineTo(26, -3);
+            ctx.lineTo(20, 0);
+            ctx.fill();
+
+            // Eye
+            ctx.fillStyle = "#000";
+            ctx.beginPath();
+            ctx.arc(16, -8, 1.5, 0, Math.PI*2);
+            ctx.fill();
+
+            // Wing Animation (Flap)
+            ctx.fillStyle = "#228B22"; // Darker Green
+            const wingY = Math.sin(frame * 0.4) * 10; 
+            ctx.beginPath();
+            ctx.moveTo(-4, -2);
+            ctx.quadraticCurveTo(6, -15 + wingY, 16, -2);
+            ctx.lineTo(6, 6);
+            ctx.fill();
+
+            // Tail Feathers
+            ctx.strokeStyle = "#2E8B57";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(-18, 2);
+            ctx.lineTo(-40, 8);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        function drawChihuahua(x, y, frame) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Bouncing movement
+            const bounce = Math.abs(Math.sin(frame * 0.4)) * 4;
+            ctx.translate(0, -bounce);
+
+            // Body
+            ctx.fillStyle = "#FFFFFF";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 20, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(14, -10, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Ears (Signature Chihuahua trait)
+            ctx.beginPath();
+            ctx.moveTo(10, -16);
+            ctx.lineTo(6, -28); // Left Ear Tip
+            ctx.lineTo(14, -18);
+            ctx.lineTo(20, -28); // Right Ear Tip
+            ctx.lineTo(20, -16);
+            ctx.fill();
+
+            // Eye
+            ctx.fillStyle = "#000";
+            ctx.beginPath();
+            ctx.arc(16, -10, 1.5, 0, Math.PI*2);
+            ctx.fill();
+
+            // Legs Animation
+            ctx.strokeStyle = "#FFFFFF";
+            ctx.lineWidth = 3.5;
+            ctx.lineCap = "round";
+            const legSwing = Math.sin(frame * 0.4);
+            
+            // Draw Legs (Front & Back)
+            const drawLeg = (offsetX, offsetY, swingDir) => {
+                ctx.beginPath();
+                ctx.moveTo(offsetX, offsetY);
+                ctx.lineTo(offsetX + (swingDir * 8), offsetY + 14);
+                ctx.stroke();
+            };
+
+            drawLeg(12, 6, legSwing);   // Front R
+            drawLeg(16, 6, -legSwing);  // Front L
+            drawLeg(-8, 6, legSwing);   // Back R
+            drawLeg(-12, 6, -legSwing); // Back L
+
+            // Tail
+            ctx.beginPath();
+            ctx.moveTo(-18, -4);
+            ctx.quadraticCurveTo(-24, -10, -26, -16 + (legSwing * 4));
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // --- ANIMATION LOOP ---
+        function loop() {
+            if (!isPlaying) return;
+
+            // Clear Canvas
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Update Positions
+            dogX += speed;
+            birdX += speed;
+
+            // Loop Logic: Reset when dog clears the screen
+            // 2170 (width) + 100 (buffer)
+            if (dogX > 2270) {
+                dogX = -100;
+                birdX = 250;
+            }
+
+            // Draw Entities
+            drawParakeet(birdX, 26, frameCount);
+            drawChihuahua(dogX, 42, frameCount);
+
+            frameCount++;
+            requestAnimationFrame(loop);
+        }
+
+        // --- EVENT HANDLERS ---
+        function toggleAnimation() {
+            isPlaying = !isPlaying;
+            if (isPlaying) loop();
+        }
+
+        function resetAnimation() {
+            dogX = -100;
+            birdX = 250;
+            frameCount = 0;
+            if (!isPlaying) {
+                isPlaying = true;
+                loop();
+            }
+        }
+
+        // Initialize
+        loop();
+
+    </script>
+</body>
+</html>
